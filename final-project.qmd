@@ -1,0 +1,297 @@
+---
+title: "Excess Mortality"
+author: "Jing Li"
+format: pdf
+editor: visual
+---
+
+# Absract
+
+This study examines mortality trends in Puerto Rico from 2007 to 2018, focusing on the impact of Hurricane Maria, which occurred on September 20, 2017. Population size by age group and sex was first assessed, revealing similar trends between males and females. Younger age groups demonstrated a steady decline in population size over the study period, while the elderly population exhibited a slight increase. To estimate expected mortality for 2017, linear regression models were applied to weekly mortality data from all years prior to 2017, stratified by age group and sex. The models produced a strong fit to the historical data, providing a good baseline mortality estimates. To improve precision, age groups with similar death rates were combined to increase sample sizes. Analysis of excess mortality following Hurricane Maria showed that men and women were equally affected, with the elderly experiencing the largest increases in deaths. These findings highlight the severe toll of Hurricane Maria, particularly on older populations, and emphasize the need for better support systems during natural disasters.
+
+# Introduction
+
+Natural disasters have profound effects on public health, often exposing and amplifying existing vulnerabilities within populations. Hurricanes can lead to widespread disruptions in healthcare access, infrastructure, and essential services, resulting in excess mortality, which are deaths that exceed what would normally be expected. Among those most vulnerable to the effects of hurricanes are older adults and the elderly (Ghosh et al., 2022; Heid et al., 2016). Chronic health conditions, reduced mobility, and difficulties evacuating put older individuals at greater risk during and after extreme weather events (Ghosh et al., 2022; Martínez-Lozano, 2023). Many older adults are also more socially isolated, which can delay access to resources and support systems (Marchand et al., 2023). These challenges, combined with disruptions in healthcare and infrastructure, mean that older populations often are the most vulunerable group. Understanding their experiences is key to identifying gaps in disaster response and improving future preparedness efforts.
+
+Socioeconomically disadvantaged populations, including racial and ethnic minorities and those living in poverty, are also disproportionately affected by hurricanes (Logan et al., 2016). These groups are more likely to live in areas with higher hurricane risk and have fewer resources to prepare for and recover from the storm’s impacts (Logan et al., 2016). Additionally, hurricanes often worsen existing health and social disparities, as limited access to healthcare, housing instability, and financial limitations often adds on to the challenges faced in the aftermath of a storm (Mattei et al., 2022). In Puerto Rico, these socioeconomic factors intersect with an aging population and a poor healthcare systems.
+
+Puerto Rico experienced several significant storms in recent decades, including Hurricane Hugo in 1989, Hurricane Georges in 1998, and Hurricane Maria on September 20, 2017. Hurricane Maria, a Category 4 storm, was particularly devastating, causing power outages, infrastructure damage, and interruptions to critical services. The widespread destruction and challenges in the months that followed raised concerns about increased mortality and the storm’s long-term health impacts on the population.
+
+This study hypothesizes that Hurricane Maria led to a significant increase in excess mortality in Puerto Rico, with older adults experiencing the largest burden of deaths compared to other age groups. Furthermore, the excess mortality of males and females are equal, reflecting a shared vulnerability across both sexes in the storm’s aftermath. To test these hypotheses, mortality trends from 2007 to 2018 were analyzed, and a linear regression model was used to estimate expected mortality for 2017 based on historical data.
+
+The findings from this analysis aim to provide critical insights into the demographic impact of Hurricane Maria, identifying the age and sex groups most affected. This information can help guide future disaster preparedness and response strategies, particularly for populations that are often the most vulnerable. By understanding mortality patterns during extreme events, policymakers and public health officials can develop targeted interventions to better protect vulnerable groups to decrease excess death overall.
+
+# Methods
+
+### Data Sources
+
+This study uses mortality data from the excessmort package in R, specifically the puerto_rico_counts dataset. The dataset provides daily counts of deaths and population estimates for Puerto Rico, spanning the years 1985 to 2022. These data are stratified by sex and age group between the years 2007-2018 only. Consider there were major events such as other hurricanes and flooding before 2005, they were excluded to ensure accurate prediction for 2017.
+
+\newpage
+
+### Population Analysis
+
+The analysis began with an exploration of demographic and mortality trends to establish baseline patterns. Population sizes were visualized over time, revealing a steady decline in younger age groups (\<15 years) and a slight increase in older age groups, particularly those aged 75 years and older. These trends were consistent across males and females, reflecting Puerto Rico’s gradual demographic shift toward an aging population.
+
+```{r, echo=FALSE, warning=FALSE}
+suppressMessages({
+library(tidyverse)
+library(dplyr)
+library(excessmort)
+library(MASS) 
+library(knitr) })
+options(dplyr.summarise.inform = FALSE)
+```
+
+```{r, fig.width=8, fig.height=6, echo=FALSE, }
+# examine population trends (date) by age group and sex
+
+pop_time_trend <- puerto_rico_counts %>%
+  group_by(date, agegroup, sex) %>%
+  summarize(total_population = sum(population, na.rm = TRUE), .groups = "drop")
+
+ggplot(pop_time_trend, aes(x = date, y = total_population, color = sex)) +
+  geom_line() +
+  facet_wrap(~ agegroup, scales = "free_y") + 
+  labs(title = "Population Sizes Over Time by Age Group and Sex",
+       x = "Date",
+       y = "Total Population",
+       color = "Sex",
+       caption = "Figure 1") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Mortality rates, defined as deaths per 100k, were also plotted for each age group and sex. Rates were higher in older age groups, while younger age groups displayed consistently lower and more stable rates. Females are shown to have lower mortality rate over all age groups with a slightly higher population than males.
+
+```{r, echo=FALSE}
+weekly_counts <- readRDS("data/weekly_death_counts.rds")
+data_by_age <- readRDS("data/weekly_death_counts_by_age.rds")
+```
+
+```{r, fig.width=8, fig.height=6, echo=FALSE}
+weekly_mortality <- weekly_counts |> 
+  mutate(year = year(date)) |>
+  group_by(agegroup, year, sex) |>
+  summarize(rates = sum(outcome)/sum(population) *100000, .groups = "drop")
+  
+weekly_mortality |> ggplot(aes(x = year, y = rates, color = sex)) +
+  geom_line() +
+  facet_wrap(~agegroup, scale = 'free_y')+
+  labs(title = "Yearly Mortality Rates per 100k",
+       x = "Year",
+       y = "Mortality Rate per 100k",
+       caption = "Figure 2") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### Transforming Daily to Weekly Mortality Counts
+
+Daily mortality counts were aggregated into weekly counts to reduce variability. Using the lubridate package, dates were standardized to the when Hurricane Maria hit (Wednesday), and mortality counts were summed for each sex and age group. Population sizes were held constant using the first observed value for each week. Incomplete weeks with fewer than seven days were excluded to maintain data consistency.
+
+### Combining Age Groups
+
+To improve the precision of mortality estimates, age groups with similar baseline mortality rates were combined prior to the regression analysis. The final age groupings were as follows: 0–4 years, 5-14 years, 15–29 years, 20–54 years, 45-54 years, 55-59 years, 60-64 years, and 65+ years. This grouping increased the sample size for each category, reduced variability, and ensured that smaller age groups with fewer deaths did not disproportionately affect the results.
+
+### Run Initial Regression Models
+
+To estimate expected weekly mortality rates, separate linear regressions were performed for each age group and sex. The model included covariates for time trends, seasonality, sex, and population size to account for any normal variation in mortality.
+
+Initial model comparisons were performed between robust regression and linear regression, with performance evaluated using Akaike Information Criterion (AIC) and root mean square error (RMSE). While robust regression is suitable for data with outliers, which there is quite a bit in looking at seasonal mortality data. Linear regression demonstrated better fit and predictive accuracy and was selected for estimating expected mortality.
+
+Excess mortality was calculated as the difference between observed and expected deaths. To refine the model and prevent extreme events from biasing baseline predictions, periods with total excess mortality greater than 75 deaths were identified and excluded. This step was restricted to the years 2007 to 2018. This approach ensured that periods with unusually high excess mortality, likely driven by acute external events, did not distort baseline mortality estimates.
+
+```{r, echo=FALSE}
+split_by_age <- function(data){
+  agegroups <- split(data, data$agegroup)
+  df_names <- c()
+  for (agegroup in names(agegroups)) {
+    df_name <- paste0("lin_reg_data_", agegroup)
+    assign(df_name, agegroups[[agegroup]], envir = .GlobalEnv)
+    df_names <- c(df_names, df_name)
+  }
+
+  print(df_names)
+}
+```
+
+```{r, echo=FALSE, results='hide'}
+age_df <- split_by_age(data_by_age)
+```
+
+```{r, echo=FALSE}
+lm_model_fits <- function(agegroups){
+  lm_fits <- list()
+  for (agegroup in agegroups) {
+    dataset <- get(agegroup, envir = .GlobalEnv)
+    dataset <- filter(dataset, year(date) < 2017)
+    fit <- lm(rate ~ as.factor(week) + sex + diftime + population, 
+              data = dataset)
+    lm_fits[[paste0("fit_", agegroup)]] <- fit
+  }
+  return(lm_fits)
+}
+```
+
+```{r, echo=FALSE}
+fitted_lm_models <- lm_model_fits(age_df)
+```
+
+```{r, echo=FALSE}
+predictions <- function(agegroups, fitted_models) {
+  reg_data_pred <- list()
+  for (agegroup in agegroups) {
+    dataset <- get(agegroup, envir = .GlobalEnv)
+    fit <- fitted_models[[paste0("fit_", agegroup)]]
+    dataset$exp <- predict(fit, newdata = dataset, se.fit = TRUE)$fit
+    dataset$exp_se <- predict(fit, newdata = dataset, se.fit = TRUE)$se.fit
+    dataset$exp_sigma <- summary(fit)$sigma
+    dataset <- dataset |> 
+      group_by(week,sex) |> 
+      mutate(
+        exp_count = exp * population,
+        exp_count_se = exp_se * population,
+        exp_count_sigma = exp_sigma * population,
+        excess = outcome - exp_count
+      ) |> ungroup()
+    assign(agegroup, dataset, envir = .GlobalEnv)
+    reg_data_pred[[agegroup]] <- dataset
+  }
+  
+  return(reg_data_pred)
+}
+
+```
+
+```{r, echo=FALSE}
+lm_preds <- predictions(age_df,fitted_lm_models)
+```
+
+```{r, echo=FALSE}
+bind_rows(lm_preds) |>
+  group_by(date, agegroup, sex) |>
+  summarise(excess_total = sum(excess),
+            se = sqrt(sum(exp_count_se^2 + exp_count_sigma^2)),
+            lwr = excess_total - 1.96*se, upr = excess_total + 1.96*se) |>
+  filter(excess_total > 75) |> mutate(week = week(date)) |>
+  kable()
+
+```
+
+The figure below displays the observed mortality rates (black points) and predicted rates (red line) from the linear regression model across age groups and sexes between 2007 and 2018, after removing periods with significant excess mortality (total excess \> 75 deaths). The model was fitted using data prior to 2017 to establish baseline mortality trends and was then used to predict expected mortality rates for all years, including 2017.
+
+For older age groups, particularly individuals aged 65 and older, the mortality rates were higher and relatively stable over time. The linear regression predictions closely follow the observed rates, showing the long term trends with slight deviations. Middle aged groups, such as 45–54, 55–59, and 60–64 years, also exhibited stable mortality rates, with the red predictions showing a good fit with the observed data. In younger age groups, including 0–4, 5–14, and 15–29 years, mortality rates were lower. However, there are quite a bit outliers in the 5–14 group.
+
+```{r, echo=FALSE, results='hide'}
+data_by_age_new <- data_by_age |> filter(!(year == 2017 & week == 38),
+                                         !(year == 2017 & week == 39),
+                                         !(year == 2017 & week == 40))
+
+age_df_new <- split_by_age(data_by_age_new)
+fitted_lm_models_new <- lm_model_fits(age_df_new)
+lm_preds_new <- predictions(age_df_new,fitted_lm_models_new)
+```
+
+```{r, echo=FALSE}
+plot_predictions <- function(agegroups) {
+  plot_data_list <- list()
+  for (agegroup in agegroups) {
+    dataset <- get(agegroup, envir = .GlobalEnv)
+    dataset$agegroup <- sub("lin_reg_data_", "", agegroup)
+
+    plot_data_list[[agegroup]] <- dataset
+  }
+  combined_data <- bind_rows(plot_data_list)
+  p <- ggplot(combined_data, aes(x = date, y = rate)) +
+    geom_point() +
+    geom_line(aes(y = exp, color = "Prediction")) +
+    facet_grid(agegroup ~ sex, scales = "free_y") +
+    theme_minimal() +
+    labs(
+      title = "Observed Rates and Predictions by Age Group and Sex",
+      subtitle = "Predictions in red",
+      x = "Date",
+      y = "Rate", caption = "Figure 3"
+    ) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    theme(legend.position = "none") 
+  
+  return(p)
+}
+```
+
+```{r, fig.width=6, fig.height=6, echo=FALSE}
+plot_predictions(age_df_new)
+```
+
+### Calculating Excess Death
+
+For all age groups, the excess mortality remains relatively stable before September 2017, with values clustering around zero. This indicates that observed deaths aligned closely with expected mortality estimates before the hurricane. However, immediately after September 2017, there is a sharp increase in excess mortality across multiple age groups, particularly among older populations with excess deaths reaching levels significantly above baseline. This trend is more pronounced in both sexes for the older age groups, consistent with the hypothesis that there is an increased vulnerability of elderly individuals during and after extreme weather events.
+
+```{r, echo=FALSE}
+excess_plot <- bind_rows(lm_preds_new) |>
+  group_by(date, agegroup, sex) |>
+  summarize(excess_total = sum(excess),
+            se = sqrt(sum(exp_count_se^2 + exp_count_sigma^2)),
+            lwr = excess_total - 1.96*se, upr = excess_total + 1.96*se)
+```
+
+```{r, fig.width=6, fig.height=6, echo=FALSE}
+excess_plot |> filter(between(year(date), 2017, 2018)) |> 
+  ggplot(aes(date, excess_total)) +
+  geom_line() +
+  geom_point() +
+  geom_errorbar(aes(ymin = lwr, ymax = upr)) + 
+  geom_vline(xintercept = as.Date("2017-09-20"), color = "red") +
+  theme_minimal() +
+  facet_grid(agegroup ~ sex, scales = "free_y") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(caption = "Figure 4")
+```
+
+In younger age groups (e.g., 0–4, 5–14, and 15–29 years), excess mortality remained relatively low throughout the study period, with only slight deviations observed after September 2017. These fluctuations may reflect smaller sample sizes and infrequent mortality events in these age groups. For middle-aged groups (30–54, 45–54, and 55–59 years), excess mortality exhibits a moderate increase following Hurricane Maria but does not reach the level seen in older groups.
+
+Sex-specific differences are minimal across most age groups, with both males and females showing similar patterns of excess mortality over time. However, slight variability in males may reflect increased mortality risks due to external factors such as occupational hazards or other acute conditions.
+
+# Results
+
+Mortality rates were initially visualized by age group and sex to establish baseline trends before modeling (figure 1). Mortality rates were consistently higher in older age groups, particularly among those aged 65 and older, and relatively lower in younger age groups such as 0–4, 5–14, and 15–29 years. Across all groups, seasonal mortality patterns were evident, characterized by cyclical fluctuations throughout the study period. Males showed slightly higher variability in mortality compared to females in middle and older age groups.
+
+A linear regression model was fitted using data from years prior to 2017 to predict expected mortality rates. The predictions were then applied to all years, including 2017, to estimate excess mortality. Weeks with total excess mortality greater than 75 deaths were removed prior to refitting the model to reduce the influence of outlier periods. The resulting predictions demonstrated a close alignment with observed mortality rates, as shown in Figure 3. Across all age groups, the predicted rates followed the observed rates closely, indicating a good model performance.
+
+Excess mortality was calculated as the difference between observed and expected deaths for each week and subgroup. Figure 4 presents the weekly total excess mortality for males and females across age groups from 2017 to 2018, with September 2017 marked by a red vertical line to denote the timing of Hurricane Maria. Before September 2017, excess mortality fluctuated around zero for most age groups, indicating no significant deviations from expected mortality. However, following Hurricane Maria, a substantial increase in excess mortality was observed, particularly among older age groups.
+
+In the 65+ age group, excess mortality reached its highest levels immediately following the hurricane, with excess deaths consistently exceeding 50 per week in some instances. Both males and females in this group experienced similar trends, though slight variability was evident in males. Excess mortality gradually declined after the initial peak but remained elevated through the later periods of 2017 and early 2018.
+
+Middle-aged groups, including those aged 45–54, 55–59, and 60–64, exhibited moderate increases in excess mortality following Hurricane Maria. While the observed increases were smaller than those seen in older populations, they were still consistently above baseline in the weeks following the hurricane. In contrast, younger age groups, particularly those aged 0–4, 5–14, and 15–29, showed relatively minor deviations from expected mortality during this period. Small fluctuations were observed, but the magnitude of excess mortality remained minimal.
+
+# Discussion
+
+The findings revealed a sharp increase in excess mortality immediately after the hurricane, with the largest deviations observed among older adults (65+). This group’s vulnerability aligns with prior research highlighting the impact of chronic health conditions, reduced mobility, and difficulty accessing care during disasters. Excess mortality among older adults persisted for several weeks, reflecting prolonged disruptions to infrastructure, healthcare systems, and essential services.
+
+Moderate increases in excess mortality were also observed among middle-aged groups (45–64 years), though to a lesser extent than in older populations. This suggests that indirect consequences of the disaster, such as healthcare disruptions and stress-related complications, may have affected these individuals. In contrast, younger age groups (0–29 years) showed minimal excess mortality, likely due to their lower baseline mortality. However, the long-term effects of the hurricane, such as malnutrition and mental health, may not be captured in mortality trends alone.
+
+Minimal differences were observed between males and females, with both sexes showing similar excess mortality patterns across all age groups. This indicates that age, rather than sex, was the primary influence of vulnerability.
+
+The use of a linear regression model, fitted to data prior to 2017 and validated against observed mortality, was suitable for this analysis. By excluding weeks with excess mortality exceeding 75 deaths before refitting the model, the baseline mortality estimates were refined, reducing bias.
+
+# Limitations
+
+The analysis does not account for specific causes of death, which would provide deeper insights into the factors driving excess mortality. Future research should include longer follow-up periods to assess the prolonged health impacts of Hurricane Maria and explore the underlying causes of mortality increases.
+
+These findings emphasize the critical need for targeted disaster preparedness strategies, particularly for older adults. Enhancing evacuation plans, ensuring access to medications, and addressing social isolation can help protect vulnerable populations. Strengthening healthcare infrastructure and emergency response systems is essential to reduce the broader impacts of future disasters.
+
+Additionally, while linear regression was chosen for its simplicity and performance, alternative modeling approaches, such as time series analysis, machine learning, or generalized additive models, could have been explored. These methods may have captured non-linear trends or interactions that were not accounted for in this study. Future research could compare different models to assess their ability to detect excess mortality during and after disasters.
+
+# Reference
+
+Ghosh, Arnab K., Martin F. Shapiro, and David Abramson. "Closing the knowledge gap in the long-term health effects of natural disasters: a research agenda for improving environmental justice in the age of climate change." International journal of environmental research and public health 19.22 (2022): 15365.
+
+Heid, Allison R., et al. "Vulnerable, but why? Post-traumatic stress symptoms in older adults exposed to Hurricane Sandy." Disaster Medicine and Public Health Preparedness 10.3 (2016): 362-370.
+
+Marchand, Jacquelyn Ann. "Impacts of Risk Perception on Elderly Vulnerability: An Exploration of Effects on Disaster Preparedness in Assisted Living Facilities." (2022).
+
+Martínez-Lozano, Marijulie, et al. "Hurricanes Irma and Maria and Diabetes incidence in Puerto Rico." BMC Public Health 23.1 (2023): 1019.
+
+Mattei, Josiemer, et al. "Chronic diseases and associated risk factors among adults in Puerto Rico after Hurricane Maria." JAMA Network Open 5.1 (2022): e2139986-e2139986.
