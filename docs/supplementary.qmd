@@ -3,9 +3,10 @@ title: "Supplementary Methods"
 format: pdf
 editor: visual
 ---
+
 ```{r}
-weekly_counts <- readRDS("data/weekly_death_counts.rds")
-data_by_age <- readRDS("data/weekly_death_counts_by_age.rds")
+weekly_counts <- readRDS("../data/weekly_death_counts.rds")
+data_by_age <- readRDS("../data/weekly_death_counts_by_age.rds")
 
 library(tidyverse)
 library(excessmort)
@@ -114,5 +115,3 @@ compare_performance(fitted_lm_models$`fit_lin_reg_data_60-64`,
 compare_performance(fitted_lm_models$`fit_lin_reg_data_65+`,
                     fitted_rlm_models$`fit_robust_reg_data_65+`)
 ```
-
-
