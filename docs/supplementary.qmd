@@ -1,0 +1,118 @@
+---
+title: "Supplementary Methods"
+format: pdf
+editor: visual
+---
+```{r}
+weekly_counts <- readRDS("data/weekly_death_counts.rds")
+data_by_age <- readRDS("data/weekly_death_counts_by_age.rds")
+
+library(tidyverse)
+library(excessmort)
+library(MASS)
+library(performance)
+```
+
+```{r}
+puerto_rico_counts |> ggplot(aes(date, population,
+                                 color = agegroup)) +
+  geom_line() + facet_wrap(~sex) + 
+  labs(title = "Population Sizes by Age Group and Sex",
+       x = "Year",
+       y = "Population") +
+  theme_minimal()
+```
+
+```{r}
+totals <- weekly_counts |> 
+  group_by(week(date),date) |>
+  summarize(rates = sum(outcome)/sum(population) *100000, .groups = "drop")
+
+totals |> filter(year(date) < 2017) |>
+  ggplot(aes(week(date), rates, group = week(date))) +
+  geom_boxplot() +
+  geom_point(data = filter(totals, year(date) == 2017), color = "red") +
+  labs(title = "Mortality Rate per 100k from 2007-2016 (2017 displayed in red)",
+       x = "Rate per 100k", y = "Week")
+```
+
+```{r}
+split_by_age <- function(data){
+  agegroups <- split(data, data$agegroup)
+  df_names <- c()
+  for (agegroup in names(agegroups)) {
+    df_name <- paste0("lin_reg_data_", agegroup)
+    assign(df_name, agegroups[[agegroup]], envir = .GlobalEnv)
+    df_names <- c(df_names, df_name)
+  }
+  print(df_names)
+}
+
+split_by_age_robust <- function(data){
+  agegroups <- split(data, data$agegroup)
+  df_names <- c()
+  for (agegroup in names(agegroups)) {
+    df_name <- paste0("robust_reg_data_", agegroup)
+    assign(df_name, agegroups[[agegroup]], envir = .GlobalEnv)
+    df_names <- c(df_names, df_name)
+  }
+  print(df_names)
+}
+```
+
+```{r}
+age_df <- split_by_age(data_by_age)
+age_df_robust <- split_by_age_robust(data_by_age)
+```
+
+```{r}
+lm_model_fits <- function(agegroups){
+  lm_fits <- list()
+  for (agegroup in agegroups) {
+    dataset <- get(agegroup, envir = .GlobalEnv)
+    dataset <- filter(dataset, year(date) < 2017)
+    fit <- lm(rate ~ as.factor(week) + sex + diftime + population, 
+              data = dataset)
+    lm_fits[[paste0("fit_", agegroup)]] <- fit
+  }
+  return(lm_fits)
+}
+
+rlm_model_fits <- function(agegroups){
+  rlm_fits <- list()
+  for (agegroup in agegroups) {
+    dataset <- get(agegroup, envir = .GlobalEnv)
+    dataset <- filter(dataset, year(date) < 2017)
+    fit <- rlm(rate ~ as.factor(week) + sex + diftime + population, 
+              data = dataset)
+    rlm_fits[[paste0("fit_", agegroup)]] <- fit
+  }
+  return(rlm_fits)
+}
+```
+
+```{r}
+fitted_lm_models <- lm_model_fits(age_df)
+fitted_rlm_models <- rlm_model_fits(age_df_robust)
+```
+
+```{r}
+compare_performance(fitted_lm_models$`fit_lin_reg_data_0-4`,
+                    fitted_rlm_models$`fit_robust_reg_data_0-4`)
+compare_performance(fitted_lm_models$`fit_lin_reg_data_5-14`,
+                    fitted_rlm_models$`fit_robust_reg_data_5-14`)
+compare_performance(fitted_lm_models$`fit_lin_reg_data_15-29`,
+                    fitted_rlm_models$`fit_robust_reg_data_15-29`)
+compare_performance(fitted_lm_models$`fit_lin_reg_data_30-54`,
+                    fitted_rlm_models$`fit_robust_reg_data_30-54`)
+compare_performance(fitted_lm_models$`fit_lin_reg_data_45-54`,
+                    fitted_rlm_models$`fit_robust_reg_data_45-54`)
+compare_performance(fitted_lm_models$`fit_lin_reg_data_55-59`,
+                    fitted_rlm_models$`fit_robust_reg_data_55-59`)
+compare_performance(fitted_lm_models$`fit_lin_reg_data_60-64`,
+                    fitted_rlm_models$`fit_robust_reg_data_60-64`)
+compare_performance(fitted_lm_models$`fit_lin_reg_data_65+`,
+                    fitted_rlm_models$`fit_robust_reg_data_65+`)
+```
+
+
