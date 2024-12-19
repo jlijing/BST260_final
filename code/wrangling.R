@@ -9,7 +9,7 @@ weekly_death_counts <- puerto_rico_counts |>
   summarize(outcome = sum(outcome), population = mean(population), 
             n = n(), .groups = "drop") |> filter(n == 7)
 
-saveRDS(weekly_death_counts, "data/weekly_death_counts.rds")
+saveRDS(weekly_death_counts, "../data/weekly_death_counts.rds")
 
 data_by_age <- weekly_death_counts |>
   filter(between(year(date), 2007, 2018)) |> 
@@ -28,5 +28,5 @@ data_by_age <- weekly_death_counts |>
   mutate(diftime = difftime(date, min(date), units =  "days"),
          week = epiweek(date), year = year(date), rate = outcome/population)
 
-saveRDS(data_by_age,"data/weekly_death_counts_by_age.rds")
+saveRDS(data_by_age,"../data/weekly_death_counts_by_age.rds")
 
